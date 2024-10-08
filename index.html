@@ -3,145 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wallet Address Checker</title>
+    <title>CSV Processor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            padding: 20px;
-        }
-
-        .container {
             max-width: 800px;
             margin: 0 auto;
-            background: white;
             padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
-
         h1 {
             text-align: center;
         }
-
-        input[type="file"] {
-            margin: 20px 0;
+        #fileInput {
+            margin-bottom: 20px;
         }
-
-        button {
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
+        #results {
+            margin-top: 20px;
         }
-
-        button:hover {
-            background-color: #0056b3;
-        }
-
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
         }
-
-        table, th, td {
-            border: 1px solid #ddd;
-        }
-
         th, td {
-            padding: 10px;
+            border: 1px solid #ddd;
+            padding: 8px;
             text-align: left;
         }
-
         th {
             background-color: #f2f2f2;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Upload CSV Files with Wallet Addresses</h1>
-        <input type="file" id="fileInput" multiple accept=".csv">
-        <button onclick="processFiles()">Upload and Check</button>
-
-        <table id="resultsTable" style="display:none;">
-            <thead>
-                <tr>
-                    <th>Address</th>
-                    <th>File</th>
-                    <th>Total Count</th>
-                </tr>
-            </thead>
-            <tbody id="resultsBody">
-            </tbody>
-        </table>
-    </div>
+    <h1>CSV Processor</h1>
+    <input type="file" id="fileInput" multiple accept=".csv">
+    <button onclick="processFiles()">Process Files</button>
+    <div id="results"></div>
 
     <script>
-        // Funkcja odczytująca pliki CSV
+        let addressData = {};
+
         function processFiles() {
-            const files = document.getElementById('fileInput').files;
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+            
             if (files.length === 0) {
-                alert("Please select at least one file.");
+                alert('Please select at least one CSV file.');
                 return;
             }
 
-            let addressCount = {};
+            addressData = {};
+            let filesProcessed = 0;
 
-            Array.from(files).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const content = e.target.result;
-                    const rows = content.split('\n');
-                    rows.forEach(row => {
-                        const address = row.trim();
-                        if (address) {
-                            if (!addressCount[address]) {
-                                addressCount[address] = { total: 0, files: {} };
-                            }
-                            if (!addressCount[address].files[file.name]) {
-                                addressCount[address].files[file.name] = 0;
-                            }
-                            addressCount[address].files[file.name]++;
-                            addressCount[address].total++; // Zwiększ całkowitą liczbę wystąpień
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                Papa.parse(file, {
+                    complete: function(results) {
+                        processCSV(results.data, file.name);
+                        filesProcessed++;
+                        if (filesProcessed === files.length) {
+                            displayResults();
                         }
-                    });
-                    if (Object.keys(addressCount).length > 0) {
-                        displayResults(addressCount);
-                    }
-                };
-                reader.readAsText(file);
-            });
+                    },
+                    header: false
+                });
+            }
         }
 
-        // Funkcja wyświetlająca wyniki w tabeli
-        function displayResults(addressCount) {
-            const resultsTable = document.getElementById('resultsTable');
-            const resultsBody = document.getElementById('resultsBody');
-
-            // Oczyszczenie tabeli przed dodaniem nowych wyników
-            resultsBody.innerHTML = '';
-
-            // Konwersja obiektu na tablicę i sortowanie według całkowitej liczby wystąpień
-            const sortedAddresses = Object.entries(addressCount).sort((a, b) => b[1].total - a[1].total);
-
-            sortedAddresses.forEach(([address, data]) => {
-                for (const file in data.files) {
-                    const count = data.files[file];
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${address}</td>
-                        <td>${file}</td>
-                        <td>${count}</td>
-                    `;
-                    resultsBody.appendChild(row);
+        function processCSV(data, fileName) {
+            for (let i = 1; i < data.length; i++) {
+                const row = data[i];
+                if (row.length >= 2) {
+                    const address = row[0];
+                    if (!addressData[address]) {
+                        addressData[address] = {count: 0, files: []};
+                    }
+                    addressData[address].count++;
+                    if (!addressData[address].files.includes(fileName)) {
+                        addressData[address].files.push(fileName);
+                    }
                 }
-            });
+            }
+        }
 
-            resultsTable.style.display = 'table';
+        function displayResults() {
+            const resultsDiv = document.getElementById('results');
+            const sortedAddresses = Object.entries(addressData)
+                .sort((a, b) => b[1].count - a[1].count);
+
+            let html = '<h2>Results</h2>';
+            html += '<table><tr><th>Address</th><th>Occurrences</th><th>Files</th></tr>';
+
+            for (const [address, data] of sortedAddresses) {
+                html += `<tr><td>${address}</td><td>${data.count}</td><td>${data.files.join(', ')}</td></tr>`;
+            }
+
+            html += '</table>';
+            resultsDiv.innerHTML = html;
         }
     </script>
 </body>
